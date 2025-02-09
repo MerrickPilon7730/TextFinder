@@ -11,13 +11,13 @@ class Program
 	static void Main()
 	{
 		string videoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "video.mp4");
-		string tessDataPath = Path.Combine(Directory.GetCurrentDirectory(), "tessdata");
 		string outputFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "output.text");
 
 		using var ocrEngine = new TesseractEngine(@"C:\Program Files\Tesseract-OCR\tessdata", "eng", EngineMode.LstmOnly);
 
 		ocrEngine.SetVariable("tessedit_char_whitelist","ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789{}[]();.,+-=*/<>!_\"'#");
-		ocrEngine.DefaultPageSegMode = PageSegMode.Auto; 
+		ocrEngine.DefaultPageSegMode = PageSegMode.AutoOsd;
+
 
 		using var capture = new VideoCapture(videoPath);
 
@@ -39,7 +39,6 @@ class Program
 		{
 			frameCount++;
 
-			// Skip frames that are not a multiple of frameSkip
 			if (frameCount % frameSkip != 0)
 				continue;
 
@@ -49,27 +48,16 @@ class Program
 			Mat grayFrame = new();
 			CvInvoke.CvtColor(frame, grayFrame, ColorConversion.Bgr2Gray);
 
-
-			// Apply Gaussian Blur to reduce noise
-			Mat blurredFrame = new();
-			CvInvoke.GaussianBlur(grayFrame, blurredFrame, new Size(5, 5), 0);
-
-			// Apply Adaptive Thresholding for better text contrast
 			Mat thresholdFrame = new();
-			CvInvoke.AdaptiveThreshold(blurredFrame, thresholdFrame, 255, AdaptiveThresholdType.GaussianC, ThresholdType.Binary, 11, 2);
-
-			Mat resizedFrame = new();
-			CvInvoke.Resize(thresholdFrame, resizedFrame, new Size(thresholdFrame.Width * 2, thresholdFrame.Height * 2), 0, 0, Inter.Linear);
-
-			CvInvoke.AdaptiveThreshold(grayFrame, thresholdFrame, 255, AdaptiveThresholdType.GaussianC, ThresholdType.Binary, 11, 2);
+			CvInvoke.Threshold(grayFrame, thresholdFrame, 120, 255, ThresholdType.Binary);
 
 
 			// Convert Mat to Bitmap
 			using Bitmap bmp = MatToBitmap(thresholdFrame);
 
-			string debugPath = @"A:\Pics";
-			Directory.CreateDirectory(debugPath);
-			bmp.Save($"{debugPath}frame_{frameCount}.png", System.Drawing.Imaging.ImageFormat.Png);
+			string debugPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "pics"));
+			string imagePath = Path.Combine(debugPath, $"frame_{frameCount}.png");
+			bmp.Save($"{imagePath}frame_{frameCount}.png", System.Drawing.Imaging.ImageFormat.Png);
 
 
 			// Convert Bitmap to Pix for Tesseract
@@ -77,6 +65,7 @@ class Program
 
 			// Process with OCR
 			using var page = ocrEngine.Process(pix);
+			Console.WriteLine($"OCR Confidence: {page.GetMeanConfidence() * 100}%");
 
 			string extractedText = page.GetText().Trim();
 			if (!string.IsNullOrEmpty(extractedText))

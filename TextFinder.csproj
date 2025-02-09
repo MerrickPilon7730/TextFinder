@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Output\" />
     <Folder Include="tessdata\" />
   </ItemGroup>
 
